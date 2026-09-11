@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">轻触连点器</string>
+    <string name="accessibility_desc">用于执行用户录制的屏幕点击坐标与定时连点任务。仅在用户主动开启任务后工作。</string>
+</resources>
