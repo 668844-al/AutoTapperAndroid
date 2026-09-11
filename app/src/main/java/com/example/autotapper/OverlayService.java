@@ -97,8 +97,8 @@ public class OverlayService extends Service {
         root.addView(header);
 
         LinearLayout stats=new LinearLayout(this);stats.setOrientation(LinearLayout.HORIZONTAL);stats.setPadding(0,dp(8),0,dp(8));
-        LinearLayout clicks=statBox("⌁","已点击");clickCountText=(TextView)clicks.getChildAt(1);stats.addView(clicks,weightStat());
-        LinearLayout duration=statBox("◷","运行时长");durationText=(TextView)duration.getChildAt(1);stats.addView(duration,weightStat());root.addView(stats);
+        LinearLayout clicks=statBox("⌁","已点击");clickCountText=(TextView)((LinearLayout)clicks.getChildAt(1)).getChildAt(1);stats.addView(clicks,weightStat());
+        LinearLayout duration=statBox("◷","运行时长");durationText=(TextView)((LinearLayout)duration.getChildAt(1)).getChildAt(1);stats.addView(duration,weightStat());root.addView(stats);
 
         LinearLayout controls=new LinearLayout(this);controls.setOrientation(LinearLayout.HORIZONTAL);controls.setGravity(Gravity.CENTER);
         LinearLayout start=control("Ⅱ","暂停",Color.rgb(232,242,255),Color.rgb(58,126,239));
