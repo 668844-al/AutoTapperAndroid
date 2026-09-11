@@ -14,6 +14,7 @@ public final class Prefs {
     private static final String KEY_TASKS = "tasks_json";
     private static final String KEY_CURRENT = "current_task_id";
     public static final String KEY_PENDING_TASK = "pending_task_id";
+    public static final String BASIC_TASK_ID = "basic_default";
 
     private Prefs() {}
     public static SharedPreferences sp(Context c) { return c.getSharedPreferences(NAME, Context.MODE_PRIVATE); }
@@ -30,7 +31,7 @@ public final class Prefs {
             } catch (Exception ignored) {}
         }
         if (out.isEmpty()) {
-            TaskProfile d = new TaskProfile(); d.name = "默认连点任务"; out.add(d); saveTasks(c, out); setCurrentTaskId(c, d.id);
+            TaskProfile d = new TaskProfile(); d.name = "预约任务 1"; out.add(d); saveTasks(c, out); setCurrentTaskId(c, d.id);
         }
         return out;
     }
@@ -39,6 +40,36 @@ public final class Prefs {
         JSONArray a = new JSONArray();
         for (TaskProfile t : list) try { a.put(t.toJson()); } catch(Exception ignored) {}
         sp(c).edit().putString(KEY_TASKS, a.toString()).apply();
+    }
+
+    public static synchronized TaskProfile basic(Context c) {
+        List<TaskProfile> list = tasks(c);
+        for (TaskProfile t : list) if (BASIC_TASK_ID.equals(t.id)) return t;
+        TaskProfile t = new TaskProfile();
+        t.id = BASIC_TASK_ID;
+        t.name = "基础连点";
+        t.ratePerMin = 120;
+        list.add(0, t);
+        saveTasks(c, list);
+        return t;
+    }
+
+    public static synchronized List<TaskProfile> advancedTasks(Context c) {
+        List<TaskProfile> all = tasks(c);
+        List<TaskProfile> out = new ArrayList<>();
+        for (TaskProfile t : all) if (!BASIC_TASK_ID.equals(t.id)) out.add(t);
+        if (out.isEmpty()) {
+            TaskProfile t = new TaskProfile(); t.name = "预约任务 1"; all.add(t); saveTasks(c, all); out.add(t);
+        }
+        return out;
+    }
+
+    public static synchronized TaskProfile currentAdvanced(Context c) {
+        String id = sp(c).getString(KEY_CURRENT, "");
+        for (TaskProfile t : advancedTasks(c)) if (t.id.equals(id)) return t;
+        TaskProfile t = advancedTasks(c).get(0);
+        setCurrentTaskId(c, t.id);
+        return t;
     }
 
     public static synchronized TaskProfile current(Context c) {
@@ -62,9 +93,13 @@ public final class Prefs {
     }
 
     public static synchronized void delete(Context c, String id) {
+        if (BASIC_TASK_ID.equals(id)) return;
         List<TaskProfile> list = tasks(c); list.removeIf(t -> t.id.equals(id));
-        if (list.isEmpty()) list.add(new TaskProfile());
-        saveTasks(c, list); setCurrentTaskId(c, list.get(0).id);
+        boolean hasAdvanced=false;
+        for (TaskProfile t:list) if (!BASIC_TASK_ID.equals(t.id)) { hasAdvanced=true; break; }
+        if (!hasAdvanced) { TaskProfile t=new TaskProfile(); t.name="预约任务 1"; list.add(t); }
+        saveTasks(c, list);
+        for (TaskProfile t:list) if (!BASIC_TASK_ID.equals(t.id)) { setCurrentTaskId(c,t.id); break; }
     }
 
     public static void setCurrentTaskId(Context c, String id) { sp(c).edit().putString(KEY_CURRENT, id).apply(); }
