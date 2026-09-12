@@ -14,7 +14,8 @@ jobs:
         run: |
           mkdir -p app/src/main/res/drawable
           cat assets/icon_part_*.b64 | base64 -d > app/src/main/res/drawable/app_icon.webp
-          test -s app/src/main/res/drawable/app_icon.webp
+          cp app/src/main/res/drawable/app_icon.webp app/src/main/res/drawable/launcher_icon_v25.webp
+          test -s app/src/main/res/drawable/launcher_icon_v25.webp
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -30,6 +31,6 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AutoTapper-v2.4-fixed-apk
+          name: AutoTapper-v2.5-half-overlay
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
