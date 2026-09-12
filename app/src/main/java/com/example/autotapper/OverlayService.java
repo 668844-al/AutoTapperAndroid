@@ -15,6 +15,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.provider.Settings;
+import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -30,7 +31,7 @@ import java.util.List;
 public class OverlayService extends Service {
     public static final String ACTION_RUN_SCHEDULE = "com.example.autotapper.RUN_SCHEDULE";
     public static final String EXTRA_TASK_ID = "task_id";
-    private static final String CHANNEL = "autotapper_running_ref";
+    private static final String CHANNEL = "autotapper_running_v25";
 
     private WindowManager wm;
     private View panel, bubble;
@@ -38,7 +39,7 @@ public class OverlayService extends Service {
     private WindowManager.LayoutParams panelLp, bubbleLp;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
-    private TextView statusText, hintText, bubbleText;
+    private TextView taskTitle, statusText, guideText, bubbleText;
     private Button startButton;
     private float recStartX, recStartY;
     private long recStartAt;
@@ -57,8 +58,11 @@ public class OverlayService extends Service {
             String taskId = intent.getStringExtra(EXTRA_TASK_ID);
             if (taskId != null) Prefs.setCurrentTaskId(this, taskId);
             handler.postDelayed(() -> {
-                if (AutoClickAccessibilityService.isConnected()) AutoClickAccessibilityService.startTask(Prefs.currentTaskId(this));
-                else Toast.makeText(this, "无障碍服务未开启，无法执行定时任务", Toast.LENGTH_LONG).show();
+                if (AutoClickAccessibilityService.isConnected()) {
+                    AutoClickAccessibilityService.startTask(Prefs.currentTaskId(this));
+                } else {
+                    Toast.makeText(this, "无障碍服务未开启，无法执行定时任务", Toast.LENGTH_LONG).show();
+                }
                 refreshStatus();
             }, 1800);
         }
@@ -82,80 +86,75 @@ public class OverlayService extends Service {
 
     private Notification buildNotification(String text) {
         Intent i = new Intent(this, MainActivity.class);
-        PendingIntent pi = PendingIntent.getActivity(this, 1, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
-        return b.setSmallIcon(R.drawable.ic_stat_tap).setContentTitle("连点器").setContentText(text).setContentIntent(pi).setOngoing(true).build();
+        PendingIntent pi = PendingIntent.getActivity(this, 1, i,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(this, CHANNEL)
+                : new Notification.Builder(this);
+        return b.setSmallIcon(R.drawable.ic_stat_tap)
+                .setContentTitle("连点器")
+                .setContentText(text)
+                .setContentIntent(pi)
+                .setOngoing(true)
+                .build();
     }
 
-    private int dp(float v) { return (int) (v * getResources().getDisplayMetrics().density + .5f); }
+    private int dp(float v) {
+        return (int) (v * getResources().getDisplayMetrics().density + .5f);
+    }
 
     private GradientDrawable panelBg() {
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(247, 251, 255), Color.rgb(236, 244, 252), Color.rgb(231, 239, 250)});
-        g.setCornerRadius(dp(28));
-        g.setStroke(dp(1), Color.argb(180, 184, 214, 246));
-        return g;
-    }
-
-    private GradientDrawable blueBg() {
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(83, 214, 255), Color.rgb(18, 129, 255), Color.rgb(26, 79, 244)});
-        g.setCornerRadius(dp(22));
-        g.setStroke(dp(1), Color.argb(210, 111, 221, 255));
-        return g;
-    }
-
-    private GradientDrawable infoBg() {
         GradientDrawable g = new GradientDrawable();
-        g.setColor(Color.argb(115, 255, 255, 255));
-        g.setCornerRadius(dp(15));
-        g.setStroke(dp(1), Color.argb(75, 185, 204, 231));
+        g.setColor(Color.argb(248, 255, 255, 255));
+        g.setCornerRadius(dp(10));
+        g.setStroke(dp(1), Color.rgb(224, 228, 236));
+        return g;
+    }
+
+    private GradientDrawable pill(int color) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(color);
+        g.setCornerRadius(dp(8));
+        g.setStroke(dp(1), Color.argb(55, 80, 90, 110));
         return g;
     }
 
     private GradientDrawable bubbleBg() {
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(247, 251, 255), Color.rgb(224, 237, 250), Color.rgb(208, 226, 247)});
+        GradientDrawable g = new GradientDrawable();
         g.setShape(GradientDrawable.OVAL);
-        g.setStroke(dp(1), Color.argb(185, 155, 192, 235));
+        g.setColor(Color.rgb(66, 92, 235));
+        g.setStroke(dp(2), Color.WHITE);
         return g;
     }
 
-    private TextView text(String s, int sp, int color, boolean bold) {
+    private TextView tv(String text, float sp, int color, boolean bold) {
         TextView t = new TextView(this);
-        t.setText(s);
+        t.setText(text);
         t.setTextSize(sp);
         t.setTextColor(color);
+        t.setGravity(Gravity.CENTER_VERTICAL);
         t.setIncludeFontPadding(false);
         if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
         return t;
     }
 
-    private TextView actionButton(String icon, String label) {
-        TextView t = text(icon + "  " + label, 18, Color.WHITE, true);
-        t.setGravity(Gravity.CENTER);
-        t.setBackground(blueBg());
-        t.setPadding(dp(12), dp(10), dp(12), dp(10));
-        t.setElevation(dp(4));
-        return t;
-    }
-
-    private Button shrinkButton() {
+    private Button miniButton(String text) {
         Button b = new Button(this);
-        b.setText("⌄⌄");
+        b.setText(text);
         b.setAllCaps(false);
-        b.setTextSize(18);
-        b.setTypeface(Typeface.DEFAULT_BOLD);
-        b.setTextColor(Color.rgb(27, 124, 240));
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(250, 252, 255), Color.rgb(229, 238, 249)});
-        g.setShape(GradientDrawable.OVAL);
-        g.setStroke(dp(1), Color.argb(175, 193, 214, 240));
-        b.setBackground(g);
-        b.setPadding(0, 0, 0, 0);
+        b.setTextSize(7.5f);
+        b.setTextColor(Color.rgb(44, 53, 72));
+        b.setBackground(pill(Color.rgb(247, 249, 253)));
         b.setMinHeight(0);
         b.setMinWidth(0);
+        b.setPadding(dp(2), 0, dp(2), 0);
         return b;
+    }
+
+    private LinearLayout.LayoutParams miniButtonLp() {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(24), 1f);
+        p.setMargins(dp(2), dp(1), dp(2), dp(1));
+        return p;
     }
 
     private void showPanel() {
@@ -166,85 +165,70 @@ public class OverlayService extends Service {
             bubbleText = null;
         }
 
-        FrameLayout outer = new FrameLayout(this);
-        outer.setClipChildren(false);
-        outer.setClipToPadding(false);
-
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(12), dp(12), dp(12), dp(12));
-        card.setBackground(panelBg());
-        card.setElevation(dp(10));
-
-        View dragZone = new View(this);
-        dragZone.setBackgroundColor(Color.TRANSPARENT);
-        card.addView(dragZone, new LinearLayout.LayoutParams(-1, dp(12)));
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(5), dp(4), dp(5), dp(4));
+        root.setBackground(panelBg());
+        root.setElevation(dp(5));
 
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
-        TextView record = actionButton("◎", "录制");
-        TextView undo = actionButton("↶", "撤销");
-        LinearLayout.LayoutParams a = new LinearLayout.LayoutParams(0, dp(70), 1f);
-        a.rightMargin = dp(8);
-        top.addView(record, a);
-        top.addView(undo, new LinearLayout.LayoutParams(0, dp(70), 1f));
-        card.addView(top);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        TextView dragMark = tv("☰", 9, Color.rgb(98, 105, 121), false);
+        dragMark.setGravity(Gravity.CENTER);
+        top.addView(dragMark, new LinearLayout.LayoutParams(dp(18), dp(20)));
 
-        LinearLayout bottom = new LinearLayout(this);
-        bottom.setOrientation(LinearLayout.HORIZONTAL);
-        bottom.setPadding(0, dp(10), 0, 0);
+        taskTitle = tv("", 8, Color.rgb(28, 34, 49), true);
+        top.addView(taskTitle, new LinearLayout.LayoutParams(0, dp(20), 1f));
 
-        startButton = new Button(this);
-        startButton.setAllCaps(false);
-        startButton.setTextSize(22);
-        startButton.setTypeface(Typeface.DEFAULT_BOLD);
-        startButton.setTextColor(Color.WHITE);
-        startButton.setBackground(blueBg());
-        startButton.setPadding(dp(12), dp(12), dp(12), dp(12));
-        startButton.setElevation(dp(4));
-        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(dp(148), dp(88));
-        sp.rightMargin = dp(10);
-        bottom.addView(startButton, sp);
+        TextView close = tv("×", 12, Color.rgb(110, 116, 130), false);
+        close.setGravity(Gravity.CENTER);
+        top.addView(close, new LinearLayout.LayoutParams(dp(20), dp(20)));
+        root.addView(top, new LinearLayout.LayoutParams(-1, dp(20)));
 
-        LinearLayout info = new LinearLayout(this);
-        info.setOrientation(LinearLayout.VERTICAL);
-        info.setBackground(infoBg());
-        info.setPadding(dp(10), dp(10), dp(10), dp(10));
-        statusText = text("", 14, Color.rgb(75, 92, 125), true);
-        statusText.setGravity(Gravity.CENTER_VERTICAL);
-        info.addView(statusText, new LinearLayout.LayoutParams(-1, dp(28)));
-        View line = new View(this);
-        line.setBackgroundColor(Color.argb(110, 188, 202, 225));
-        info.addView(line, new LinearLayout.LayoutParams(-1, dp(1)));
-        hintText = text("", 13, Color.rgb(76, 94, 126), false);
-        hintText.setGravity(Gravity.CENTER_VERTICAL);
-        hintText.setPadding(0, dp(7), 0, 0);
-        info.addView(hintText, new LinearLayout.LayoutParams(-1, 0, 1f));
-        bottom.addView(info, new LinearLayout.LayoutParams(0, dp(88), 1f));
-        card.addView(bottom);
+        statusText = tv("", 6.5f, Color.rgb(91, 99, 116), false);
+        statusText.setGravity(Gravity.CENTER);
+        root.addView(statusText, new LinearLayout.LayoutParams(-1, dp(15)));
 
-        outer.addView(card, new FrameLayout.LayoutParams(dp(320), FrameLayout.LayoutParams.WRAP_CONTENT));
-        Button shrink = shrinkButton();
-        FrameLayout.LayoutParams slp = new FrameLayout.LayoutParams(dp(48), dp(48), Gravity.END | Gravity.BOTTOM);
-        slp.rightMargin = -dp(10);
-        slp.bottomMargin = -dp(8);
-        outer.addView(shrink, slp);
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setGravity(Gravity.CENTER);
+        startButton = miniButton("▶ 开始");
+        Button record = miniButton("＋ 录制");
+        Button undo = miniButton("↶ 撤销");
+        actions.addView(startButton, miniButtonLp());
+        actions.addView(record, miniButtonLp());
+        actions.addView(undo, miniButtonLp());
+        root.addView(actions, new LinearLayout.LayoutParams(-1, dp(27)));
 
-        panel = outer;
-        panelLp = new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
-                Build.VERSION.SDK_INT >= 26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE,
+        guideText = tv("", 6.5f, Color.rgb(102, 109, 126), false);
+        guideText.setGravity(Gravity.CENTER);
+        guideText.setPadding(dp(2), dp(1), dp(2), 0);
+        root.addView(guideText, new LinearLayout.LayoutParams(-1, dp(20)));
+
+        panel = root;
+        panelLp = new WindowManager.LayoutParams(
+                dp(160),
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                Build.VERSION.SDK_INT >= 26
+                        ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                        : WindowManager.LayoutParams.TYPE_PHONE,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT);
         panelLp.gravity = Gravity.TOP | Gravity.START;
-        panelLp.x = dp(14);
+        panelLp.x = dp(10);
         panelLp.y = dp(160);
         wm.addView(panel, panelLp);
 
-        attachLongPressDrag(dragZone, panelLp, panel);
-        attachLongPressDrag(info, panelLp, panel);
-
-        record.setOnClickListener(v -> showRecorder());
-        undo.setOnClickListener(v -> {
+        attachDragOrClick(root, panelLp, panel, null);
+        attachDragOrClick(dragMark, panelLp, panel, null);
+        attachDragOrClick(taskTitle, panelLp, panel, null);
+        attachDragOrClick(statusText, panelLp, panel, null);
+        attachDragOrClick(guideText, panelLp, panel, null);
+        attachDragOrClick(close, panelLp, panel, this::stopSelf);
+        attachDragOrClick(startButton, panelLp, panel, this::toggleRun);
+        attachDragOrClick(record, panelLp, panel, this::showRecorder);
+        attachDragOrClick(undo, panelLp, panel, () -> {
             TaskProfile t = Prefs.current(this);
             if (!t.actions.isEmpty()) {
                 t.actions.remove(t.actions.size() - 1);
@@ -252,19 +236,18 @@ public class OverlayService extends Service {
             }
             refreshStatus();
         });
-        startButton.setOnClickListener(v -> toggleRun());
-        shrink.setOnClickListener(v -> collapse());
+
         refreshStatus();
     }
 
     private void toggleRun() {
         TaskProfile t = Prefs.current(this);
         if (!AutoClickAccessibilityService.isConnected()) {
-            Toast.makeText(this, "请先开启无障碍服务", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "请先开启无障碍权限", Toast.LENGTH_SHORT).show();
             return;
         }
         if (t.actions.isEmpty()) {
-            Toast.makeText(this, "请先点录制，再点目标位置", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "请先录制点击位置", Toast.LENGTH_SHORT).show();
             return;
         }
         if (AutoClickAccessibilityService.isRunning()) AutoClickAccessibilityService.stopNow();
@@ -274,90 +257,145 @@ public class OverlayService extends Service {
 
     private void refreshStatus() {
         TaskProfile t = Prefs.current(this);
+        boolean basic = Prefs.BASIC_TASK_ID.equals(t.id);
+        if (taskTitle != null) {
+            taskTitle.setText(basic ? "基础连点" : ((t.name == null || t.name.isEmpty()) ? "预约任务" : t.name));
+        }
+
         int taps = 0, swipes = 0;
         for (TaskProfile.Action a : t.actions) {
             if (TaskProfile.Action.SWIPE.equals(a.type)) swipes++; else taps++;
         }
         boolean running = AutoClickAccessibilityService.isRunning();
         int total = t.actions.size();
-        String run = running ? "运行中" : "已暂停";
-        String rate = t.ratePerMin + "次/分";
-        String count = total + "动作";
-        String progress = t.maxCycles > 0 ? AutoClickAccessibilityService.cyclesDone() + "/" + t.maxCycles + "轮" : count;
+        String progress = t.maxCycles > 0
+                ? AutoClickAccessibilityService.cyclesDone() + "/" + t.maxCycles + "轮"
+                : total + "动作";
 
-        if (startButton != null) startButton.setText(running ? "⏸  暂停" : "▶  开始");
-        if (statusText != null) statusText.setText(run + "  |  " + rate + "  |  " + count);
-        if (hintText != null) {
-            if (!AutoClickAccessibilityService.isConnected()) hintText.setText("请先开启无障碍权限");
-            else if (total == 0) hintText.setText("先点“录制”，再点目标位置");
-            else if (running) hintText.setText("正在执行，可点“暂停”停止");
-            else hintText.setText("已录制 " + taps + " 点" + (swipes > 0 ? " + " + swipes + " 滑" : "") + "，点“开始”即可执行");
+        if (statusText != null) {
+            statusText.setText((running ? "运行中" : "已暂停") + " · " + t.ratePerMin + "次/分 · " + taps + "点" + (swipes > 0 ? "/" + swipes + "滑" : ""));
         }
-        if (bubbleText != null) bubbleText.setText((running ? "▶" : "Ⅱ") + "\n" + t.ratePerMin + "/分\n" + progress);
+        if (startButton != null) startButton.setText(running ? "Ⅱ 暂停" : "▶ 开始");
+        if (guideText != null) {
+            if (!AutoClickAccessibilityService.isConnected()) guideText.setText("请先开启无障碍权限");
+            else if (total == 0) guideText.setText("先录制，再点目标位置");
+            else if (running) guideText.setText("运行中 · 长按拖到边缘收缩");
+            else guideText.setText("已录制 " + total + " 个动作");
+        }
+        if (bubbleText != null) {
+            bubbleText.setText((running ? "▶" : "Ⅱ") + "\n" + t.ratePerMin + "/分\n" + progress);
+        }
     }
 
-    private void collapse() {
+    private void collapseAtCurrentEdge() {
+        int x = panelLp != null ? panelLp.x : dp(6);
+        int y = panelLp != null ? panelLp.y : dp(220);
+        int w = panel != null ? panel.getWidth() : dp(160);
         if (panel != null) {
             try { wm.removeView(panel); } catch (Exception ignored) {}
             panel = null;
+            taskTitle = null;
             statusText = null;
-            hintText = null;
+            guideText = null;
             startButton = null;
         }
-        if (bubble != null) return;
+        showBubble(x, y, w);
+    }
 
-        TextView b = text("", 10, Color.rgb(41, 76, 132), true);
+    private void showBubble(int oldX, int oldY, int oldWidth) {
+        if (bubble != null) return;
+        TextView b = tv("", 6.5f, Color.WHITE, true);
         b.setGravity(Gravity.CENTER);
         b.setBackground(bubbleBg());
-        b.setPadding(dp(7), dp(7), dp(7), dp(7));
-        b.setLineSpacing(0, 1.0f);
-        b.setElevation(dp(9));
+        b.setPadding(dp(3), dp(3), dp(3), dp(3));
+        b.setLineSpacing(0, 0.95f);
+        b.setElevation(dp(6));
         bubble = b;
         bubbleText = b;
-        bubbleLp = new WindowManager.LayoutParams(dp(78), dp(78),
-                Build.VERSION.SDK_INT >= 26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE,
+
+        int size = dp(54);
+        DisplayMetrics dm = new DisplayMetrics();
+        wm.getDefaultDisplay().getMetrics(dm);
+        int screenW = dm.widthPixels;
+        int margin = dp(4);
+        boolean rightSide = oldX + oldWidth / 2 >= screenW / 2;
+
+        bubbleLp = new WindowManager.LayoutParams(
+                size, size,
+                Build.VERSION.SDK_INT >= 26
+                        ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                        : WindowManager.LayoutParams.TYPE_PHONE,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT);
         bubbleLp.gravity = Gravity.TOP | Gravity.START;
-        bubbleLp.x = dp(14);
-        bubbleLp.y = dp(240);
+        bubbleLp.x = rightSide ? screenW - size - margin : margin;
+        bubbleLp.y = Math.max(dp(30), Math.min(oldY, dm.heightPixels - size - dp(30)));
         wm.addView(bubble, bubbleLp);
         attachBubbleTouch(bubble, bubbleLp);
         refreshStatus();
     }
 
-    private void expand() {
-        if (bubble != null) {
-            try { wm.removeView(bubble); } catch (Exception ignored) {}
-            bubble = null;
-            bubbleText = null;
-        }
-        showPanel();
+    private boolean nearScreenEdge(WindowManager.LayoutParams lp, View target) {
+        DisplayMetrics dm = new DisplayMetrics();
+        wm.getDefaultDisplay().getMetrics(dm);
+        int edge = dp(18);
+        int w = target.getWidth() > 0 ? target.getWidth() : dp(160);
+        int h = target.getHeight() > 0 ? target.getHeight() : dp(90);
+        return lp.x <= edge
+                || lp.y <= edge
+                || lp.x + w >= dm.widthPixels - edge
+                || lp.y + h >= dm.heightPixels - edge;
     }
 
-    private void attachLongPressDrag(View handle, WindowManager.LayoutParams lp, View target) {
+    private void clampToScreen(WindowManager.LayoutParams lp, View target) {
+        DisplayMetrics dm = new DisplayMetrics();
+        wm.getDefaultDisplay().getMetrics(dm);
+        int w = target.getWidth() > 0 ? target.getWidth() : dp(160);
+        int h = target.getHeight() > 0 ? target.getHeight() : dp(90);
+        lp.x = Math.max(0, Math.min(lp.x, dm.widthPixels - w));
+        lp.y = Math.max(0, Math.min(lp.y, dm.heightPixels - h));
+    }
+
+    private void attachDragOrClick(View handle, WindowManager.LayoutParams lp, View target, Runnable clickAction) {
         handle.setOnTouchListener(new View.OnTouchListener() {
             float downX, downY;
             int startX, startY;
             boolean dragging;
+            boolean movedBeforeLong;
             final Runnable longPress = () -> dragging = true;
 
             @Override public boolean onTouch(View v, MotionEvent e) {
                 switch (e.getAction()) {
                     case MotionEvent.ACTION_DOWN:
-                        downX = e.getRawX(); downY = e.getRawY(); startX = lp.x; startY = lp.y; dragging = false;
-                        handler.postDelayed(longPress, 320);
+                        downX = e.getRawX();
+                        downY = e.getRawY();
+                        startX = lp.x;
+                        startY = lp.y;
+                        dragging = false;
+                        movedBeforeLong = false;
+                        handler.postDelayed(longPress, 360);
                         return true;
                     case MotionEvent.ACTION_MOVE:
+                        float dx = e.getRawX() - downX;
+                        float dy = e.getRawY() - downY;
                         if (dragging) {
-                            lp.x = startX + (int) (e.getRawX() - downX);
-                            lp.y = startY + (int) (e.getRawY() - downY);
+                            lp.x = startX + (int) dx;
+                            lp.y = startY + (int) dy;
+                            clampToScreen(lp, target);
                             try { wm.updateViewLayout(target, lp); } catch (Exception ignored) {}
-                        } else if (Math.abs(e.getRawX() - downX) + Math.abs(e.getRawY() - downY) > dp(10)) {
+                        } else if (Math.abs(dx) + Math.abs(dy) > dp(8)) {
+                            movedBeforeLong = true;
                             handler.removeCallbacks(longPress);
                         }
                         return true;
                     case MotionEvent.ACTION_UP:
+                        handler.removeCallbacks(longPress);
+                        if (dragging) {
+                            if (nearScreenEdge(lp, target)) collapseAtCurrentEdge();
+                        } else if (!movedBeforeLong && clickAction != null) {
+                            clickAction.run();
+                        }
+                        return true;
                     case MotionEvent.ACTION_CANCEL:
                         handler.removeCallbacks(longPress);
                         return true;
@@ -372,30 +410,45 @@ public class OverlayService extends Service {
             float downX, downY;
             int startX, startY;
             boolean dragging;
+            boolean movedBeforeLong;
             final Runnable longPress = () -> dragging = true;
 
             @Override public boolean onTouch(View v, MotionEvent e) {
                 switch (e.getAction()) {
                     case MotionEvent.ACTION_DOWN:
-                        downX = e.getRawX(); downY = e.getRawY(); startX = lp.x; startY = lp.y; dragging = false;
-                        handler.postDelayed(longPress, 320);
+                        downX = e.getRawX();
+                        downY = e.getRawY();
+                        startX = lp.x;
+                        startY = lp.y;
+                        dragging = false;
+                        movedBeforeLong = false;
+                        handler.postDelayed(longPress, 360);
                         return true;
                     case MotionEvent.ACTION_MOVE:
+                        float dx = e.getRawX() - downX;
+                        float dy = e.getRawY() - downY;
                         if (dragging) {
-                            lp.x = startX + (int) (e.getRawX() - downX);
-                            lp.y = startY + (int) (e.getRawY() - downY);
+                            lp.x = startX + (int) dx;
+                            lp.y = startY + (int) dy;
+                            clampToScreen(lp, target);
                             try { wm.updateViewLayout(target, lp); } catch (Exception ignored) {}
-                        } else if (Math.abs(e.getRawX() - downX) + Math.abs(e.getRawY() - downY) > dp(10)) {
+                        } else if (Math.abs(dx) + Math.abs(dy) > dp(8)) {
+                            movedBeforeLong = true;
                             handler.removeCallbacks(longPress);
                         }
                         return true;
                     case MotionEvent.ACTION_UP:
                         handler.removeCallbacks(longPress);
-                        if (!dragging) expand();
+                        if (!dragging && !movedBeforeLong) {
+                            try { wm.removeView(target); } catch (Exception ignored) {}
+                            bubble = null;
+                            bubbleText = null;
+                            showPanel();
+                        }
                         return true;
                     case MotionEvent.ACTION_CANCEL:
                         handler.removeCallbacks(longPress);
-                        return false;
+                        return true;
                 }
                 return false;
             }
@@ -408,46 +461,49 @@ public class OverlayService extends Service {
         if (bubble != null) bubble.setVisibility(View.GONE);
 
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.argb(16, 28, 47, 88));
+        root.setBackgroundColor(Color.TRANSPARENT);
         recorder = root;
 
-        TextView hint = text("轻点 = 点击位置   ·   拖动 = 滑动手势", 13, Color.WHITE, false);
+        TextView hint = tv("录制模式：轻点=点击位置 · 拖动=滑动", 12, Color.WHITE, true);
         hint.setGravity(Gravity.CENTER);
-        GradientDrawable hg = new GradientDrawable();
-        hg.setColor(Color.argb(220, 36, 63, 115));
-        hg.setCornerRadius(dp(16));
-        hint.setBackground(hg);
-        hint.setPadding(dp(14), dp(10), dp(14), dp(10));
-        FrameLayout.LayoutParams hp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-        hp.topMargin = dp(24);
+        hint.setBackground(pill(Color.argb(235, 40, 47, 62)));
+        FrameLayout.LayoutParams hp = new FrameLayout.LayoutParams(dp(310), dp(42), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        hp.topMargin = dp(22);
         root.addView(hint, hp);
 
-        Button done = new Button(this);
-        done.setText("完成录制");
-        done.setAllCaps(false);
-        done.setTextSize(16);
-        done.setTypeface(Typeface.DEFAULT_BOLD);
+        TextView sub = tv("录制完成后前台页面恢复正常操作", 11, Color.WHITE, false);
+        sub.setGravity(Gravity.CENTER);
+        sub.setBackground(pill(Color.argb(205, 58, 65, 80)));
+        FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(dp(300), dp(36), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        sp.topMargin = dp(70);
+        root.addView(sub, sp);
+
+        Button done = miniButton("完成录制");
         done.setTextColor(Color.WHITE);
-        done.setBackground(blueBg());
-        FrameLayout.LayoutParams dlp = new FrameLayout.LayoutParams(dp(138), dp(48), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        dlp.bottomMargin = dp(32);
+        done.setTextSize(13);
+        done.setTypeface(Typeface.DEFAULT_BOLD);
+        done.setBackground(pill(Color.rgb(66, 92, 235)));
+        FrameLayout.LayoutParams dlp = new FrameLayout.LayoutParams(dp(150), dp(48), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        dlp.bottomMargin = dp(28);
         root.addView(done, dlp);
         done.setOnClickListener(v -> closeRecorder());
 
         root.setOnTouchListener((v, e) -> {
             if (e.getAction() == MotionEvent.ACTION_DOWN) {
-                if (e.getY() < dp(85) || e.getY() > root.getHeight() - dp(95)) return true;
-                recStartX = e.getRawX(); recStartY = e.getRawY(); recStartAt = System.currentTimeMillis();
+                if (e.getY() < dp(115) || e.getY() > root.getHeight() - dp(95)) return true;
+                recStartX = e.getRawX();
+                recStartY = e.getRawY();
+                recStartAt = System.currentTimeMillis();
                 return true;
             }
             if (e.getAction() == MotionEvent.ACTION_UP) {
                 if (recStartAt == 0) return true;
                 float ex = e.getRawX(), ey = e.getRawY();
-                float dd = (float) Math.hypot(ex - recStartX, ey - recStartY);
-                long dur = Math.max(100, System.currentTimeMillis() - recStartAt);
+                float distance = (float) Math.hypot(ex - recStartX, ey - recStartY);
+                long duration = Math.max(100, System.currentTimeMillis() - recStartAt);
                 TaskProfile t = Prefs.current(this);
-                if (dd < dp(22)) t.actions.add(TaskProfile.Action.tap(recStartX, recStartY));
-                else t.actions.add(TaskProfile.Action.swipe(recStartX, recStartY, ex, ey, dur));
+                if (distance < dp(22)) t.actions.add(TaskProfile.Action.tap(recStartX, recStartY));
+                else t.actions.add(TaskProfile.Action.swipe(recStartX, recStartY, ex, ey, duration));
                 Prefs.upsert(this, t);
                 renderActions(root, t.actions);
                 recStartAt = 0;
@@ -457,8 +513,12 @@ public class OverlayService extends Service {
             return true;
         });
 
-        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
-                Build.VERSION.SDK_INT >= 26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE,
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                Build.VERSION.SDK_INT >= 26
+                        ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                        : WindowManager.LayoutParams.TYPE_PHONE,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT);
         lp.gravity = Gravity.TOP | Gravity.START;
@@ -477,21 +537,20 @@ public class OverlayService extends Service {
                 addLine(root, a.x1, a.y1, a.x2, a.y2);
                 addMarker(root, a.x1, a.y1, "S" + (i + 1));
                 addMarker(root, a.x2, a.y2, "→");
-            } else addMarker(root, a.x1, a.y1, String.valueOf(i + 1));
+            } else {
+                addMarker(root, a.x1, a.y1, String.valueOf(i + 1));
+            }
         }
     }
 
     private void addMarker(FrameLayout root, float x, float y, String label) {
-        TextView m = text(label, 11, Color.WHITE, false);
+        TextView m = tv(label, 11, Color.WHITE, true);
         m.setTag("marker");
         m.setGravity(Gravity.CENTER);
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(Color.argb(235, 67, 121, 252));
-        g.setCornerRadius(dp(17));
-        m.setBackground(g);
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(34), dp(34));
-        lp.leftMargin = (int) x - dp(17);
-        lp.topMargin = (int) y - dp(17);
+        m.setBackground(pill(Color.rgb(66, 92, 235)));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(32), dp(32));
+        lp.leftMargin = (int) x - dp(16);
+        lp.topMargin = (int) y - dp(16);
         root.addView(m, lp);
     }
 
@@ -499,7 +558,7 @@ public class OverlayService extends Service {
         float dist = (float) Math.hypot(x2 - x1, y2 - y1);
         View line = new View(this);
         line.setTag("marker");
-        line.setBackgroundColor(Color.argb(220, 90, 143, 255));
+        line.setBackgroundColor(Color.rgb(91, 114, 242));
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams((int) dist, dp(3));
         lp.leftMargin = (int) x1;
         lp.topMargin = (int) y1;
