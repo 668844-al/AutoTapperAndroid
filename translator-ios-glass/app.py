@@ -2,6 +2,7 @@
 import sys
 import re
 import ctypes
+import time
 from ctypes import wintypes
 
 from PySide6.QtCore import Qt, QObject, Signal, QRunnable, QThreadPool, QPoint, QEvent
