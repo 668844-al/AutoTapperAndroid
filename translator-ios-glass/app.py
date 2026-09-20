@@ -12,9 +12,11 @@ from PySide6.QtWidgets import (
     QLineEdit, QSizePolicy
 )
 
-from deep_translator import GoogleTranslator
+from deep_translator import GoogleTranslator\nimport translators as ts
 
 APP_NAME = "中英文互译"
+_TRANSLATION_CACHE = {}
+_CACHE_LIMIT = 200
 
 
 def has_chinese(text: str) -> bool:
@@ -55,14 +57,74 @@ class TranslateWorker(QRunnable):
         self.signals = WorkerSignals()
 
     def run(self):
+        key = (self.text, self.source, self.target)
+        cached = _TRANSLATION_CACHE.get(key)
+        if cached is not None:
+            self.signals.finished.emit(cached)
+            return
+
         try:
-            translator = GoogleTranslator(source=self.source, target=self.target)
+            source = self.source
+            if source == "auto":
+                source = "zh-CN" if has_chinese(self.text) else "en"
+
+            bing_source = "zh" if source in ("zh", "zh-CN", "zh-cn") else source
+            bing_target = "zh" if self.target in ("zh", "zh-CN", "zh-cn") else self.target
+
+            google_source = "zh-CN" if bing_source == "zh" else bing_source
+            google_target = "zh-CN" if bing_target == "zh" else bing_target
+
             result = []
+            last_error = None
+
             for part in split_text(self.text):
-                result.append(translator.translate(part))
-            self.signals.finished.emit("\n".join(result))
-        except Exception as e:
-            self.signals.error.emit(str(e))
+                translated = None
+
+                # 主引擎：Bing。避免 Google 网页端的频率限制。
+                try:
+                    translated = ts.translate_text(
+                        part,
+                        translator="bing",
+                        from_language=bing_source,
+                        to_language=bing_target,
+                    )
+                    if not isinstance(translated, str) or not translated.strip():
+                        translated = None
+                except Exception as e:
+                    last_error = e
+                    translated = None
+
+                # 备用引擎：Google。只有 Bing 暂时不可用时才调用。
+                if translated is None:
+                    try:
+                        time.sleep(0.45)
+                        translated = GoogleTranslator(
+                            source=google_source,
+                            target=google_target
+                        ).translate(part)
+                    except Exception as e:
+                        last_error = e
+                        translated = None
+
+                if translated is None:
+                    raise RuntimeError("translation_service_busy") from last_error
+
+                result.append(translated)
+                if len(self.text) > 3500:
+                    time.sleep(0.35)
+
+            final = "\n".join(result)
+
+            if len(_TRANSLATION_CACHE) >= _CACHE_LIMIT:
+                try:
+                    _TRANSLATION_CACHE.pop(next(iter(_TRANSLATION_CACHE)))
+                except Exception:
+                    _TRANSLATION_CACHE.clear()
+            _TRANSLATION_CACHE[key] = final
+
+            self.signals.finished.emit(final)
+        except Exception:
+            self.signals.error.emit("翻译服务暂时繁忙，请稍后再试。")
 
 
 class GlassBackdrop(QWidget):
@@ -307,7 +369,7 @@ class FloatingTranslator(ResizableFrameless):
         QApplication.clipboard().setText(result)
 
     def _error(self, message):
-        self.output_label.setText("网络错误")
+        self.output_label.setText("服务繁忙")
         self.output_label.setToolTip(message[:300])
 
     def mouseDoubleClickEvent(self, event):
