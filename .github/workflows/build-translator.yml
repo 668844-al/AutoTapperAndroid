@@ -39,6 +39,7 @@ jobs:
           --name "中英文互译"
           --icon app.ico
           --collect-all deep_translator
+          --collect-all translators
           app.py
 
       - name: Smoke check
@@ -50,7 +51,7 @@ jobs:
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
-          name: ios-glass-translator-bing-fallback-v3
+          name: ios-glass-translator-bing-fallback-v4
           path: translator-ios-glass/dist/中英文互译.exe
           if-no-files-found: error
           compression-level: 0
