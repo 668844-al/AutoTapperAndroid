@@ -13,7 +13,8 @@ from PySide6.QtWidgets import (
     QLineEdit, QSizePolicy
 )
 
-from deep_translator import GoogleTranslator\nimport translators as ts
+from deep_translator import GoogleTranslator
+import translators as ts
 
 APP_NAME = "中英文互译"
 _TRANSLATION_CACHE = {}
